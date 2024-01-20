@@ -100,15 +100,17 @@ func NewSession(login, password string, opts ...SessionOpts) (*Session, error) {
 		accountStreamerURL = sandboxAccountStreamerURL
 	}
 
+	client.SetBaseURL(url)
+
 	resp, err := client.R().
 		SetBody(User{Username: login, Password: password, RememberMe: opt.RememberMe}).
-		Post(url)
+		Post("/sessions")
 	if err != nil {
 		return nil, err
 	}
 
 	if resp.StatusCode() >= 400 {
-		return nil, fmt.Errorf("%d %s - %s", resp.StatusCode(), resp.Status(), resp.Body())
+		return nil, fmt.Errorf("%s: %s", resp.Status(), resp.Body())
 	}
 
 	session := &Session{
