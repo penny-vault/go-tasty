@@ -52,10 +52,13 @@ type Session struct {
 	ExternalID string
 	Username   string
 
-	ApiURL             string
-	AccountStreamerURL string
+	ApiURL             string // Base URL of the api, changes based on production vs sandbox environment
+	AccountStreamerURL string // Base URL of websocket for account streaming data
 
-	Token         *atomic.Value
+	Token *atomic.Value // Session token - valid for 24 hours
+
+	// Remember token - can be exchanged for a new session token. Each
+	// remember token can be used exactly once and expire after 28 days
 	RememberToken *atomic.Value
 }
 
@@ -121,6 +124,9 @@ func NewSession(login, password string, opts ...SessionOpts) (*Session, error) {
 		ExpiresOn:       resp.ReceivedAt().Add(24 * time.Hour),
 
 		Username: login,
+
+		Token:         &atomic.Value{},
+		RememberToken: &atomic.Value{},
 	}
 
 	body := string(resp.Body())
