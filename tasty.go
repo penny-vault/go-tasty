@@ -55,8 +55,8 @@ type Session struct {
 	ApiURL             string
 	AccountStreamerURL string
 
-	token         *atomic.Value
-	rememberToken *atomic.Value
+	Token         *atomic.Value
+	RememberToken *atomic.Value
 }
 
 // SessionOpts provide additional settings when creating a new tastytrade Open API session
@@ -122,11 +122,11 @@ func NewSession(login, password string, opts ...SessionOpts) (*Session, error) {
 	}
 
 	body := string(resp.Body())
-	session.token.Store(gjson.Get(body, "data.session-token").Str)
+	session.Token.Store(gjson.Get(body, "data.session-token").Str)
 
 	if opt.RememberMe {
 		session.RememberMeExpiresOn = resp.ReceivedAt().Add(28 * 24 * time.Hour)
-		session.rememberToken.Store(gjson.Get(body, "data.session-token").Str)
+		session.RememberToken.Store(gjson.Get(body, "data.session-token").Str)
 	}
 
 	session.Name = gjson.Get(body, "data.user.name").Str
