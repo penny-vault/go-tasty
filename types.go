@@ -15,12 +15,76 @@
 
 package gotasty
 
+import (
+	"sync"
+	"sync/atomic"
+	"time"
+)
+
+// Session stores user credentials and enables users to make authenticated
+// requests of the tastytrade Open API. Sessions are safe for concurrent
+// use in multiple goroutines.
+type Session struct {
+	AuthenticatedOn     time.Time // time the session was first authenticated
+	ExpiresOn           time.Time // time when the session token will expire
+	RememberMeExpiresOn time.Time // time when the remember-me token will expire
+
+	Name       string
+	Nickname   string
+	Email      string
+	ExternalID string
+	Username   string
+
+	ApiURL             string // Base URL of the api, changes based on production vs sandbox environment
+	AccountStreamerURL string // Base URL of websocket for account streaming data
+
+	Token *atomic.Value // Session token - valid for 24 hours
+
+	// Remember token - can be exchanged for a new session token. Each
+	// remember token can be used exactly once and expire after 28 days
+	RememberToken *atomic.Value
+
+	Debug bool // print details of each response and request
+
+	RefreshLocker *sync.Mutex
+}
+
+// SessionOpts provide additional settings when creating a new tastytrade Open API session
+type SessionOpts struct {
+	// request a remember-me token which enables the API to refresh session
+	// tokens for up-to 28 days
+	RememberMe bool
+
+	// use the tastytrade Open API sandbox environment for testing
+	Sandbox bool
+
+	// enable debug mode which prints the status of each request
+	Debug bool
+}
+
 // User is used to authenticate a user session
 type User struct {
 	Username      string `json:"login"`
 	Password      string `json:"password,omitempty"`
 	RememberMe    bool   `json:"remember-me"`
 	RememberToken string `json:"remember-token,omitempty"`
+}
+
+// AccountInfo stores information about the accounts available to the current customer
+type AccountInfo struct {
+	AccountNumber     string    `json:"account-number"`    // account number, e.g. 5WT0001
+	ExternalID        string    `json:"external-id"`       // external identifier, e.g. A0000196557
+	OpenedAt          time.Time `json:"opened-at"`         // time the account was opened
+	Nickname          string    `json:"nickname"`          // customer assigned nickname for account
+	AccountType       string    `json:"account-type-name"` // type of account
+	DayTraderStatus   bool      `json:"day-trader-status"` // if account is flagged as a pattern day trader
+	IsFirmError       bool      `json:"is-firm-error"`
+	IsFirmProprietary bool      `json:"is-firm-proprietary"`
+	IsTestDrive       bool      `json:"is-test-drive"`
+	MarginOrCash      string    `json:"margin-or-cash"`
+	IsForeign         bool      `json:"is-foreign"`
+	FundingDate       time.Time `json:"funding-date"`
+	AuthorityLevel    string    `json:"authority-level"`
 }
 
 /*

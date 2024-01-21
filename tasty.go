@@ -20,11 +20,15 @@
 package gotasty
 
 import (
+	"errors"
 	"fmt"
+	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/go-resty/resty/v2"
+	"github.com/goccy/go-json"
+	"github.com/rs/zerolog/log"
 	"github.com/tidwall/gjson"
 )
 
@@ -38,49 +42,14 @@ const (
 	accountStreamerURL        = "wss://streamer.tastyworks.com"
 )
 
-// Session stores user credentials and enables users to make authenticated
-// requests of the tastytrade Open API. Sessions are safe for concurrent
-// use in multiple goroutines.
-type Session struct {
-	AuthenticatedOn     time.Time // time the session was first authenticated
-	ExpiresOn           time.Time // time when the session token will expire
-	RememberMeExpiresOn time.Time // time when the remember-me token will expire
-
-	Name       string
-	Nickname   string
-	Email      string
-	ExternalID string
-	Username   string
-
-	ApiURL             string // Base URL of the api, changes based on production vs sandbox environment
-	AccountStreamerURL string // Base URL of websocket for account streaming data
-
-	Token *atomic.Value // Session token - valid for 24 hours
-
-	// Remember token - can be exchanged for a new session token. Each
-	// remember token can be used exactly once and expire after 28 days
-	RememberToken *atomic.Value
-}
-
-// SessionOpts provide additional settings when creating a new tastytrade Open API session
-type SessionOpts struct {
-	// request a remember-me token which enables the API to refresh session
-	// tokens for up-to 28 days
-	RememberMe bool
-
-	// use the tastytrade Open API sandbox environment for testing
-	Sandbox bool
-
-	// create a go routine that will automatically refresh the session when it expires
-	EnableAutomaticRefresh bool
-
-	// enable debug mode which prints the status of each request
-	Debug bool
-}
+var (
+	ErrSessionExpired       = errors.New("session token is expired")
+	ErrRememberTokenExpired = errors.New("remember-me token is expired")
+)
 
 // NewSession obtains a session token and optionally a remember-me token from the
 // tastytrade Open API. If you want sessions to be refreshed after they expire,
-// set the `SessionOpts.RememberMe` and `SessionOpts.EnableAutomaticRefresh` options.
+// set the `SessionOpts.RememberMe` option.
 func NewSession(login, password string, opts ...SessionOpts) (*Session, error) {
 	var opt SessionOpts
 	if len(opts) > 0 {
@@ -90,7 +59,6 @@ func NewSession(login, password string, opts ...SessionOpts) (*Session, error) {
 	client := resty.New()
 
 	client.SetDebug(opt.Debug)
-
 	client.SetHeaders(map[string]string{
 		"Content-Type": "application/json",
 		"User-Agent":   userAgent,
@@ -127,20 +95,136 @@ func NewSession(login, password string, opts ...SessionOpts) (*Session, error) {
 
 		Token:         &atomic.Value{},
 		RememberToken: &atomic.Value{},
+
+		RefreshLocker: &sync.Mutex{},
+		Debug:         opt.Debug,
 	}
 
 	body := string(resp.Body())
-	session.Token.Store(gjson.Get(body, "data.session-token").Str)
+	session.Token.Store(gjson.Get(body, "data.session-token").String())
 
 	if opt.RememberMe {
 		session.RememberMeExpiresOn = resp.ReceivedAt().Add(28 * 24 * time.Hour)
-		session.RememberToken.Store(gjson.Get(body, "data.session-token").Str)
+		session.RememberToken.Store(gjson.Get(body, "data.session-token").String())
 	}
 
-	session.Name = gjson.Get(body, "data.user.name").Str
-	session.Nickname = gjson.Get(body, "data.user.nickname").Str
-	session.Email = gjson.Get(body, "data.user.email").Str
-	session.ExternalID = gjson.Get(body, "data.user.external-id").Str
+	session.Name = gjson.Get(body, "data.user.name").String()
+	session.Nickname = gjson.Get(body, "data.user.nickname").String()
+	session.Email = gjson.Get(body, "data.user.email").String()
+	session.ExternalID = gjson.Get(body, "data.user.external-id").String()
 
 	return session, nil
+}
+
+func (session *Session) restyClient() (*resty.Client, error) {
+	client := resty.New()
+	client.SetBaseURL(session.ApiURL)
+	client.SetHeaders(map[string]string{
+		"Content-Type": "application/json",
+		"User-Agent":   userAgent,
+	})
+	client.SetDebug(session.Debug)
+
+	// check if the session token is expired
+	// NOTE: add a 5 minute buffer to ensure that the token doesn't expire mid-use
+	if session.ExpiresOn.Before(time.Now().Add(-5 * time.Minute)) {
+		session.RefreshLocker.Lock()
+		defer session.RefreshLocker.Unlock()
+
+		log.Debug().Time("TokenExpires", session.ExpiresOn).
+			Time("RememberTokenExpires", session.RememberMeExpiresOn).Msg("session token is expired")
+
+		rememberMe := session.RememberToken.Load().(string)
+
+		// if no remember-me token available return an error
+		if rememberMe == "" {
+			return nil, ErrSessionExpired
+		}
+
+		// there is a remember-me token, check if it's expired
+		if session.RememberMeExpiresOn.Before(time.Now()) {
+			return nil, ErrRememberTokenExpired
+		}
+
+		// there is a valid remember-me token, exchange it for a session token
+		resp, err := client.R().
+			SetBody(User{Username: session.Username, RememberToken: session.RememberToken.Load().(string), RememberMe: true}).
+			Post("/sessions")
+		if err != nil {
+			return nil, err
+		}
+
+		if resp.StatusCode() >= 400 {
+			return nil, fmt.Errorf("%s: %s", resp.Status(), resp.Body())
+		}
+
+		body := string(resp.Body())
+
+		session.ExpiresOn = resp.ReceivedAt().Add(24 * time.Hour)
+		session.Token.Store(gjson.Get(body, "data.session-token").String())
+
+		session.RememberMeExpiresOn = resp.ReceivedAt().Add(28 * 24 * time.Hour)
+		session.RememberToken.Store(gjson.Get(body, "data.session-token").String())
+	}
+
+	client.SetHeader("Authorization", session.Token.Load().(string))
+
+	return client, nil
+}
+
+// Accounts returns a list of accounts held by the customer
+func (session *Session) Accounts() ([]*AccountInfo, error) {
+	client, err := session.restyClient()
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := client.R().Get("/customers/me/accounts")
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.StatusCode() >= 400 {
+		return nil, fmt.Errorf("%s (accounts): %s", resp.Status(), resp.Body())
+	}
+
+	arr := gjson.Get(string(resp.Body()), "data.items").Array()
+	accounts := make([]*AccountInfo, len(arr))
+	for idx, acct := range arr {
+		accounts[idx].AccountNumber = acct.Get("account.account-number").String()
+		accounts[idx].ExternalID = acct.Get("account.external-id").String()
+		accounts[idx].OpenedAt = acct.Get("account.opened-at").Time()
+		accounts[idx].Nickname = acct.Get("account.nickname").String()
+		accounts[idx].AccountType = acct.Get("account.account-type-name").String()
+		accounts[idx].DayTraderStatus = acct.Get("account.day-trader-status").Bool()
+		accounts[idx].MarginOrCash = acct.Get("account.margin-or-cash").String()
+		accounts[idx].AuthorityLevel = acct.Get("authority-level").String()
+		accounts[idx].IsFirmError = acct.Get("account.is-firm-error").Bool()
+		accounts[idx].IsFirmProprietary = acct.Get("account.is-firm-proprietary").Bool()
+		accounts[idx].IsTestDrive = acct.Get("account.is-test-drive").Bool()
+		accounts[idx].IsForeign = acct.Get("account.is-foreign").Bool()
+		accounts[idx].FundingDate = acct.Get("account.funding-date").Time()
+	}
+
+	return accounts, nil
+}
+
+func (session *Session) Marshal() ([]byte, error) {
+	return json.Marshal(struct {
+		ApiURL            string `json:"url"`
+		SessionToken      string `json:"token"`
+		ExpiresOn         int64  `json:"expires"`
+		RememberToken     string `json:"remember-token"`
+		RememberExpiresOn int64  `json:"remember-expires"`
+	}{
+		ApiURL:            session.ApiURL,
+		SessionToken:      session.Token.Load().(string),
+		ExpiresOn:         session.ExpiresOn.Unix(),
+		RememberToken:     session.RememberToken.Load().(string),
+		RememberExpiresOn: session.RememberMeExpiresOn.Unix(),
+	})
+}
+
+func (session *Session) Unmarshal(sessStr string) *Session {
+	return nil
 }
