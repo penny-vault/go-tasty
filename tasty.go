@@ -142,9 +142,9 @@ func NewSessionFromBytes(sessionData []byte) (*Session, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer uncompress.Close()
 
 	decoder := json.NewDecoder(uncompress)
-
 	if err := decoder.Decode(&data); err != nil {
 		return nil, err
 	}
@@ -226,10 +226,11 @@ func (session *Session) Marshal() ([]byte, error) {
 		return []byte{}, err
 	}
 
-	myBytes := out.Bytes()
-	fmt.Println("Bytes", len(myBytes))
+	if err := compressor.Close(); err != nil {
+		return []byte{}, err
+	}
 
-	return myBytes, nil
+	return out.Bytes(), nil
 }
 
 func (session *Session) restyClient() (*resty.Client, error) {
