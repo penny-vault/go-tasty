@@ -6,6 +6,7 @@ require github.com/go-resty/resty/v2 v2.11.0
 
 require (
 	github.com/goccy/go-json v0.10.2 // indirect
+	github.com/klauspost/compress v1.17.4 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.19 // indirect
 	golang.org/x/sys v0.16.0 // indirect

@@ -20,6 +20,7 @@
 package gotasty
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"sync"
@@ -28,6 +29,7 @@ import (
 
 	"github.com/go-resty/resty/v2"
 	"github.com/goccy/go-json"
+	"github.com/klauspost/compress/zstd"
 	"github.com/rs/zerolog/log"
 	"github.com/tidwall/gjson"
 )
@@ -114,6 +116,117 @@ func NewSession(login, password string, opts ...SessionOpts) (*Session, error) {
 	session.ExternalID = gjson.Get(body, "data.user.external-id").String()
 
 	return session, nil
+}
+
+// NewSessionFromBytes constructs a session object from the serialized bytes
+func NewSessionFromBytes(sessionData []byte) (*Session, error) {
+	var data struct {
+		AuthenticatedOn   int64  `json:"authenticated-on"`
+		ApiURL            string `json:"url"`
+		SessionToken      string `json:"token"`
+		ExpiresOn         int64  `json:"expires"`
+		RememberToken     string `json:"remember-token"`
+		RememberExpiresOn int64  `json:"remember-expires"`
+
+		Name       string `json:"name"`
+		Nickname   string `json:"nickname"`
+		Email      string `json:"email"`
+		ExternalID string `json:"external-id"`
+		Username   string `json:"username"`
+
+		Debug bool `json:"debug"`
+	}
+
+	buf := bytes.NewBuffer(sessionData)
+	uncompress, err := zstd.NewReader(buf)
+	if err != nil {
+		return nil, err
+	}
+
+	decoder := json.NewDecoder(uncompress)
+
+	if err := decoder.Decode(&data); err != nil {
+		return nil, err
+	}
+
+	session := &Session{
+		Name:       data.Name,
+		Nickname:   data.Nickname,
+		Email:      data.Email,
+		ExternalID: data.ExternalID,
+		Username:   data.Username,
+		Debug:      data.Debug,
+
+		Token:         &atomic.Value{},
+		RememberToken: &atomic.Value{},
+	}
+
+	if data.ApiURL == sandboxApiURL {
+		session.ApiURL = sandboxApiURL
+		session.AccountStreamerURL = sandboxAccountStreamerURL
+	} else {
+		session.ApiURL = apiURL
+		session.AccountStreamerURL = accountStreamerURL
+	}
+
+	session.Token.Store(data.SessionToken)
+	session.RememberToken.Store(data.RememberToken)
+
+	session.AuthenticatedOn = time.Unix(data.AuthenticatedOn, 0)
+	session.ExpiresOn = time.Unix(data.ExpiresOn, 0)
+	session.RememberMeExpiresOn = time.Unix(data.RememberExpiresOn, 0)
+
+	return session, nil
+}
+
+// Marshal serializes the Session object as a JSON string
+func (session *Session) Marshal() ([]byte, error) {
+	var out bytes.Buffer
+
+	compressor, err := zstd.NewWriter(&out)
+	if err != nil {
+		return []byte{}, err
+	}
+
+	encoder := json.NewEncoder(compressor)
+
+	err = encoder.Encode(struct {
+		AuthenticatedOn   int64  `json:"authenticated-on"`
+		ApiURL            string `json:"url"`
+		SessionToken      string `json:"token"`
+		ExpiresOn         int64  `json:"expires"`
+		RememberToken     string `json:"remember-token"`
+		RememberExpiresOn int64  `json:"remember-expires"`
+
+		Name       string `json:"name"`
+		Nickname   string `json:"nickname"`
+		Email      string `json:"email"`
+		ExternalID string `json:"external-id"`
+		Username   string `json:"username"`
+
+		Debug bool `json:"debug"`
+	}{
+		AuthenticatedOn:   session.AuthenticatedOn.Unix(),
+		ApiURL:            session.ApiURL,
+		SessionToken:      session.Token.Load().(string),
+		ExpiresOn:         session.ExpiresOn.Unix(),
+		RememberToken:     session.RememberToken.Load().(string),
+		RememberExpiresOn: session.RememberMeExpiresOn.Unix(),
+
+		Name:       session.Name,
+		Nickname:   session.Nickname,
+		Email:      session.Email,
+		ExternalID: session.ExternalID,
+		Username:   session.Username,
+
+		Debug: session.Debug,
+	})
+
+	if err != nil {
+		return []byte{}, err
+	}
+
+	return out.Bytes(), nil
 }
 
 func (session *Session) restyClient() (*resty.Client, error) {
@@ -207,24 +320,4 @@ func (session *Session) Accounts() ([]*AccountInfo, error) {
 	}
 
 	return accounts, nil
-}
-
-func (session *Session) Marshal() ([]byte, error) {
-	return json.Marshal(struct {
-		ApiURL            string `json:"url"`
-		SessionToken      string `json:"token"`
-		ExpiresOn         int64  `json:"expires"`
-		RememberToken     string `json:"remember-token"`
-		RememberExpiresOn int64  `json:"remember-expires"`
-	}{
-		ApiURL:            session.ApiURL,
-		SessionToken:      session.Token.Load().(string),
-		ExpiresOn:         session.ExpiresOn.Unix(),
-		RememberToken:     session.RememberToken.Load().(string),
-		RememberExpiresOn: session.RememberMeExpiresOn.Unix(),
-	})
-}
-
-func (session *Session) Unmarshal(sessStr string) *Session {
-	return nil
 }
