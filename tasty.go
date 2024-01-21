@@ -226,7 +226,10 @@ func (session *Session) Marshal() ([]byte, error) {
 		return []byte{}, err
 	}
 
-	return out.Bytes(), nil
+	myBytes := out.Bytes()
+	fmt.Println("Bytes", len(myBytes))
+
+	return myBytes, nil
 }
 
 func (session *Session) restyClient() (*resty.Client, error) {
