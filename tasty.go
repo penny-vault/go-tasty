@@ -240,7 +240,8 @@ func (session *Session) restyClient() (*resty.Client, error) {
 		"Content-Type": "application/json",
 		"User-Agent":   userAgent,
 	})
-	client.SetDebug(session.Debug)
+	fmt.Println(session.Debug)
+	client.SetDebug(true)
 
 	// check if the session token is expired
 	// NOTE: add a 5 minute buffer to ensure that the token doesn't expire mid-use
