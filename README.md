@@ -9,7 +9,24 @@ go-tasty is an idiomatic go library for interfacing with the [tastytrade Open AP
 
 * Download account information
 * Place and monitor trades
-* Get streaming quotes
+
+## Todo
+
+Currently go-tasty doesn't support every portion of the tastytrade Open API. The following
+endpoints need to be implemented:
+
+* Instruments
+* Margin Requirements
+* Market Metrics
+* Net Liquidating Value History
+* Risk Parameters
+* Symbol Search
+* Watchlists
+
+Streaming account data and market data are not supported.
+
+Finally, order management is limited to creating, listing, and deleting simple orders.
+Complex order types for BLAST, OCO, OTO, OTOCO, and PAIRS are not supported.
 
 ## Installation
 
