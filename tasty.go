@@ -160,6 +160,8 @@ func NewSessionFromBytes(sessionData []byte) (*Session, error) {
 
 		Token:         &atomic.Value{},
 		RememberToken: &atomic.Value{},
+
+		RefreshLocker: &sync.Mutex{},
 	}
 
 	if data.BaseURL == sandboxAPIBaseURL {
