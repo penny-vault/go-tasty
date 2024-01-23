@@ -108,7 +108,7 @@ func NewSession(login, password string, opts ...SessionOpts) (*Session, error) {
 
 	if opt.RememberMe {
 		session.RememberMeExpiresOn = resp.ReceivedAt().Add(28 * 24 * time.Hour)
-		session.RememberToken.Store(gjson.Get(body, "data.session-token").String())
+		session.RememberToken.Store(gjson.Get(body, "data.remember-token").String())
 	}
 
 	session.Name = gjson.Get(body, "data.user.name").String()

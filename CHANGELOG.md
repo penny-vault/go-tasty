@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Bug when restoring a session from disk that caused SEGFAULT when updating session token
+- Bug when creating a new session pulled the wrong value for remember-token
 
 ## [0.1.0] - 2024-01-22
 
