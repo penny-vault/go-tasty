@@ -1,7 +1,7 @@
 # go-tasty
 
 
-[![godoc](http://img.shields.io/badge/godoc-reference-blue.svg?style=flat)](https://godoc.org/github.com/penny-vault/go-tasty) [![license](http://img.shields.io/badge/license-Apache-red.svg?style=flat)](https://opensource.org/license/apache-2-0/) [![Build Status](https://github.com/penny-vault/go-tasty/actions/workflows/test.yml/badge.svg)](https://github.com/penny-vault/go-tasty/actions/workflows/test.yml)
+[![godoc](http://img.shields.io/badge/godoc-reference-blue.svg?style=flat)](https://godoc.org/github.com/penny-vault/go-tasty) [![license](http://img.shields.io/badge/license-Apache-red.svg?style=flat)](https://opensource.org/license/apache-2-0/)
 
 go-tasty is an idiomatic go library for interfacing with the [tastytrade Open API](https://support.tastytrade.com/support/s/solutions/articles/43000700385). To use the library you will need an account with tastytrade that is opted-in to the API. See the instructions under `Open API Access` on the [tastytrade Open API help page](https://support.tastytrade.com/support/s/solutions/articles/43000700385). For more information about the api see https://developer.tastytrade.com/
 
