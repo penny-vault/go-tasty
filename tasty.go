@@ -241,8 +241,7 @@ func (session *Session) Delete() error {
 		return err
 	}
 
-	resp, err := client.R().
-		Delete("/sessions")
+	resp, err := client.R().Delete("/sessions")
 	if err != nil {
 		return err
 	}
@@ -804,10 +803,7 @@ func (session *Session) Orders(accountNumber string, filterOpts ...OrdersFilterO
 	arr := gjson.Get(string(resp.Body()), "data.items").Array()
 	orders := make([]*OrderStatus, len(arr))
 	for idx, order := range arr {
-		orders[idx], err = parseOrderStatus(order)
-		if err != nil {
-			return nil, err
-		}
+		orders[idx] = parseOrderStatus(order)
 	}
 
 	return orders, nil
@@ -835,21 +831,35 @@ func (session *Session) SubmitOrder(accountNumber string, order *Order) (*OrderR
 	orderStatus := gjson.Get(content, "data.order")
 
 	return &OrderResponse{
-		/*
-			Order: parseOrderStatus(orderStatus),
-			BuyingPowerEffect Effect       `json:"buying-power-effect"`
-			FeeCalculation    string       `json:"fee-calculation"`
-			Errors            []*ErrorMsg  `json:"errors"`
-			Warnings          []*ErrorMsg  `json:"warnings"`
-		*/
+		Order:               parseOrderStatus(orderStatus),
+		EffectOnBuyingPower: parseEffectOnBuyingPower(gjson.Get(content, "data.buying-power-effect")),
+		FeeCalculation:      parseFeeInfo(gjson.Get(content, "data.fee-calculation")),
+		Errors:              parseErrors(gjson.Get(content, "data.errors").Array()),
+		Warnings:            parseErrors(gjson.Get(content, "data.warnings").Array()),
 	}, nil
 }
 
-func (session *Session) DeleteOrder(accountNumber string, orderID string) (*OrderResponse, error) {
-	return nil, nil
+// DeleteOrder attempts to delete orderID
+func (session *Session) DeleteOrder(accountNumber string, orderID string) (*OrderStatus, error) {
+	client, err := session.restyClient()
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := client.R().
+		Delete(fmt.Sprintf("/sessions/%s/orders/%s", accountNumber, orderID))
+	if err != nil {
+		return nil, err
+	}
+
+	content := string(resp.Body())
+	order := gjson.Get(content, "data.order")
+	orderStatus := parseOrderStatus(order)
+
+	return orderStatus, nil
 }
 
-func parseOrderStatus(order gjson.Result) (*OrderStatus, error) {
+func parseOrderStatus(order gjson.Result) *OrderStatus {
 	underlyingInstrumentType := InstrumentTypeFromString(order.Get("underlying-instrument-type").String())
 	valueEffect := EffectFromString(order.Get("value-effect").String())
 	priceEffect := EffectFromString(order.Get("price-effect").String())
@@ -973,5 +983,50 @@ func parseOrderStatus(order gjson.Result) (*OrderStatus, error) {
 		ReceivedAt:               order.Get("received-at").Time(),
 	}
 
-	return orderStatus, nil
+	return orderStatus
+}
+
+func parseEffectOnBuyingPower(result gjson.Result) *BuyingPowerChange {
+	return &BuyingPowerChange{
+		ChangeInMarginRequirement:            result.Get("change-in-margin-requirement").Float(),
+		ChangeInMarginRequirementEffect:      EffectFromString(result.Get("change-in-margin-requirement-effect").String()),
+		ChangeInBuyingPower:                  result.Get("change-in-buying-power").Float(),
+		ChangeInBuyingPowerEffect:            EffectFromString(result.Get("change-in-buying-power-effect").String()),
+		CurrentBuyingPower:                   result.Get("current-buying-power").Float(),
+		CurrentBuyingPowerEffect:             EffectFromString(result.Get("current-buying-power-effect").String()),
+		NewBuyingPower:                       result.Get("new-buying-power").Float(),
+		NewBuyingPowerEffect:                 EffectFromString(result.Get("new-buying-power-effect").String()),
+		IsolatedOrderMarginRequirement:       result.Get("isolated-order-margin-requirement").Float(),
+		IsolatedOrderMarginRequirementEffect: EffectFromString(result.Get("isolated-order-margin-requirement-effect").String()),
+		IsSpread:                             result.Get("is-spread").Bool(),
+		Impact:                               result.Get("impact").Float(),
+		EffectOnCash:                         EffectFromString(result.Get("effect").String()),
+	}
+}
+
+func parseFeeInfo(result gjson.Result) *FeeInfo {
+	return &FeeInfo{
+		RegulatoryFees:                   result.Get("regulatory-fees").Float(),
+		RegulatoryFeesEffect:             EffectFromString(result.Get("regulatory-fees-effect").String()),
+		ClearingFees:                     result.Get("clearing-fees").Float(),
+		ClearingFeesEffect:               EffectFromString(result.Get("clearing-fees-effect").String()),
+		Commission:                       result.Get("commission").Float(),
+		CommissionEffect:                 EffectFromString(result.Get("commission-effect").String()),
+		ProprietaryIndexOptionFees:       result.Get("proprietary-index-option-fees").Float(),
+		ProprietaryIndexOptionFeesEffect: EffectFromString(result.Get("proprietary-index-option-fees-effect").String()),
+		TotalFees:                        result.Get("total-fees").Float(),
+		TotalFeesEffect:                  EffectFromString(result.Get("total-fees-effect").String()),
+	}
+}
+
+func parseErrors(arr []gjson.Result) []*ErrorMsg {
+	errorArr := make([]*ErrorMsg, len(arr))
+	for idx, errorMsg := range arr {
+		errorArr[idx] = &ErrorMsg{
+			Code:        errorMsg.Get("code").String(),
+			Message:     errorMsg.Get("message").String(),
+			PreflightID: errorMsg.Get("preflight-id").String(),
+		}
+	}
+	return errorArr
 }

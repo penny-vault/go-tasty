@@ -800,14 +800,38 @@ type ConditionPriceComponents struct {
 type OrderResponse struct {
 	Order               *OrderStatus       `json:"order"`
 	EffectOnBuyingPower *BuyingPowerChange `json:"buying-power-effect"`
-	FeeCalculation      string             `json:"fee-calculation"`
+	FeeCalculation      *FeeInfo           `json:"fee-calculation"`
 	Errors              []*ErrorMsg        `json:"errors"`
 	Warnings            []*ErrorMsg        `json:"warnings"`
 }
 
 type BuyingPowerChange struct {
-	ChangeInMarginRequirement       float64 `json:"change-in-margin-requirement"`
-	ChangeInMarginRequirementEffect Effect  `json:"change-in-margin-requirement-effect"`
+	ChangeInMarginRequirement            float64 `json:"change-in-margin-requirement"`
+	ChangeInMarginRequirementEffect      Effect  `json:"change-in-margin-requirement-effect"`
+	ChangeInBuyingPower                  float64 `json:"change-in-buying-power"`
+	ChangeInBuyingPowerEffect            Effect  `json:"change-in-buying-power-effect"`
+	CurrentBuyingPower                   float64 `json:"current-buying-power"`
+	CurrentBuyingPowerEffect             Effect  `json:"current-buying-power-effect"`
+	NewBuyingPower                       float64 `json:"new-buying-power"`
+	NewBuyingPowerEffect                 Effect  `json:"new-buying-power-effect"`
+	IsolatedOrderMarginRequirement       float64 `json:"isolated-order-margin-requirement"`
+	IsolatedOrderMarginRequirementEffect Effect  `json:"isolated-order-margin-requirement-effect"`
+	IsSpread                             bool    `json:"is-spread"`
+	Impact                               float64 `json:"impact"`
+	EffectOnCash                         Effect  `json:"effect"`
+}
+
+type FeeInfo struct {
+	RegulatoryFees                   float64 `json:"regulatory-fees"`
+	RegulatoryFeesEffect             Effect  `json:"regulatory-fees-effect"`
+	ClearingFees                     float64 `json:"clearing-fees"`
+	ClearingFeesEffect               Effect  `json:"clearing-fees-effect"`
+	Commission                       float64 `json:"commission"`
+	CommissionEffect                 Effect  `json:"commission-effect"`
+	ProprietaryIndexOptionFees       float64 `json:"proprietary-index-option-fees"`
+	ProprietaryIndexOptionFeesEffect Effect  `json:"proprietary-index-option-fees-effect"`
+	TotalFees                        float64 `json:"total-fees"`
+	TotalFeesEffect                  Effect  `json:"total-fees-effect"`
 }
 
 type OrderStatus struct {
