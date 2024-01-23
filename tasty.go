@@ -1,4 +1,4 @@
-// Copyright 2021-2023
+// Copyright 2024
 // SPDX-License-Identifier: Apache-2.0
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,9 +14,8 @@
 // limitations under the License.
 
 // Package gotasty provides an idiomatic go interface to the tastytrade
-// Open API. It implements session management, account information,
-// order execution, and streaming quotes.
-
+// Open API. It implements session management, account information, and
+// order execution.
 package gotasty
 
 import (
@@ -38,8 +37,8 @@ import (
 const (
 	userAgent = "go-tasty/1.0.0 (https://github.com/penny-vault/go-tasty)"
 
-	sandboxApiURL = "https://api.cert.tastyworks.com"
-	apiURL        = "https://api.tastyworks.com"
+	sandboxAPIBaseURL = "https://api.cert.tastyworks.com"
+	APIBaseURL        = "https://api.tastyworks.com"
 
 	sandboxAccountStreamerURL = "wss://streamer.cert.tastyworks.com"
 	accountStreamerURL        = "wss://streamer.tastyworks.com"
@@ -48,6 +47,7 @@ const (
 var (
 	ErrSessionExpired       = errors.New("session token is expired")
 	ErrRememberTokenExpired = errors.New("remember-me token is expired")
+	ErrInvalidHTTPResponse  = errors.New("invalid HTTP response received")
 )
 
 // NewSession obtains a session token and optionally a remember-me token from the
@@ -67,10 +67,10 @@ func NewSession(login, password string, opts ...SessionOpts) (*Session, error) {
 		"User-Agent":   userAgent,
 	})
 
-	url := apiURL
+	url := APIBaseURL
 	accountStreamerURL := accountStreamerURL
 	if opt.Sandbox {
-		url = sandboxApiURL
+		url = sandboxAPIBaseURL
 		accountStreamerURL = sandboxAccountStreamerURL
 	}
 
@@ -84,12 +84,12 @@ func NewSession(login, password string, opts ...SessionOpts) (*Session, error) {
 	}
 
 	if resp.StatusCode() >= 400 {
-		return nil, fmt.Errorf("%s: %s", resp.Status(), resp.Body())
+		return nil, fmt.Errorf("%w %s: %s", ErrInvalidHTTPResponse, resp.Status(), resp.Body())
 	}
 
 	session := &Session{
 		AccountStreamerURL: accountStreamerURL,
-		ApiURL:             url,
+		BaseURL:            url,
 
 		AuthenticatedOn: resp.ReceivedAt(),
 		ExpiresOn:       resp.ReceivedAt().Add(24 * time.Hour),
@@ -123,7 +123,7 @@ func NewSession(login, password string, opts ...SessionOpts) (*Session, error) {
 func NewSessionFromBytes(sessionData []byte) (*Session, error) {
 	var data struct {
 		AuthenticatedOn   int64  `json:"authenticated-on"`
-		ApiURL            string `json:"url"`
+		BaseURL           string `json:"url"`
 		SessionToken      string `json:"token"`
 		ExpiresOn         int64  `json:"expires"`
 		RememberToken     string `json:"remember-token"`
@@ -162,11 +162,11 @@ func NewSessionFromBytes(sessionData []byte) (*Session, error) {
 		RememberToken: &atomic.Value{},
 	}
 
-	if data.ApiURL == sandboxApiURL {
-		session.ApiURL = sandboxApiURL
+	if data.BaseURL == sandboxAPIBaseURL {
+		session.BaseURL = sandboxAPIBaseURL
 		session.AccountStreamerURL = sandboxAccountStreamerURL
 	} else {
-		session.ApiURL = apiURL
+		session.BaseURL = APIBaseURL
 		session.AccountStreamerURL = accountStreamerURL
 	}
 
@@ -193,7 +193,7 @@ func (session *Session) Marshal() ([]byte, error) {
 
 	err = encoder.Encode(struct {
 		AuthenticatedOn   int64  `json:"authenticated-on"`
-		ApiURL            string `json:"url"`
+		BaseURL           string `json:"url"`
 		SessionToken      string `json:"token"`
 		ExpiresOn         int64  `json:"expires"`
 		RememberToken     string `json:"remember-token"`
@@ -208,7 +208,7 @@ func (session *Session) Marshal() ([]byte, error) {
 		Debug bool `json:"debug"`
 	}{
 		AuthenticatedOn:   session.AuthenticatedOn.Unix(),
-		ApiURL:            session.ApiURL,
+		BaseURL:           session.BaseURL,
 		SessionToken:      session.Token.Load().(string),
 		ExpiresOn:         session.ExpiresOn.Unix(),
 		RememberToken:     session.RememberToken.Load().(string),
@@ -247,7 +247,7 @@ func (session *Session) Delete() error {
 	}
 
 	if resp.StatusCode() >= 400 {
-		return fmt.Errorf("%s: %s", resp.Status(), resp.Body())
+		return fmt.Errorf("%w %s: %s", ErrInvalidHTTPResponse, resp.Status(), resp.Body())
 	}
 
 	return nil
@@ -255,7 +255,7 @@ func (session *Session) Delete() error {
 
 func (session *Session) restyClient() (*resty.Client, error) {
 	client := resty.New()
-	client.SetBaseURL(session.ApiURL)
+	client.SetBaseURL(session.BaseURL)
 	client.SetHeaders(map[string]string{
 		"Content-Type": "application/json",
 		"User-Agent":   userAgent,
@@ -293,7 +293,7 @@ func (session *Session) restyClient() (*resty.Client, error) {
 		}
 
 		if resp.StatusCode() >= 400 {
-			return nil, fmt.Errorf("%s: %s", resp.Status(), resp.Body())
+			return nil, fmt.Errorf("%w %s: %s", ErrInvalidHTTPResponse, resp.Status(), resp.Body())
 		}
 
 		body := string(resp.Body())
@@ -323,7 +323,7 @@ func (session *Session) Accounts() ([]*Account, error) {
 	}
 
 	if resp.StatusCode() >= 400 {
-		return nil, fmt.Errorf("%s (accounts): %s", resp.Status(), resp.Body())
+		return nil, fmt.Errorf("%w %s (accounts): %s", ErrInvalidHTTPResponse, resp.Status(), resp.Body())
 	}
 
 	arr := gjson.Get(string(resp.Body()), "data.items").Array()
@@ -362,7 +362,7 @@ func (session *Session) Balance(accountNumber string) (*Balance, error) {
 	}
 
 	if resp.StatusCode() >= 400 {
-		return nil, fmt.Errorf("%s (balances): %s", resp.Status(), resp.Body())
+		return nil, fmt.Errorf("%w %s (balances): %s", ErrInvalidHTTPResponse, resp.Status(), resp.Body())
 	}
 
 	body := string(resp.Body())
@@ -426,13 +426,16 @@ func (session *Session) BalanceSnapshot(accountNumber string, timeOfDay TimeOfDa
 		return nil, err
 	}
 
-	resp, err := client.R().Get(fmt.Sprintf("/accounts/%s/balance-snapshots", accountNumber))
+	resp, err := client.R().
+		SetQueryParam("snapshot-date", snapshotDate.Format(time.RFC3339)).
+		SetQueryParam("time-of_day", timeOfDay.String()).
+		Get(fmt.Sprintf("/accounts/%s/balance-snapshots", accountNumber))
 	if err != nil {
 		return nil, err
 	}
 
 	if resp.StatusCode() >= 400 {
-		return nil, fmt.Errorf("%s (balance-snapshots): %s", resp.Status(), resp.Body())
+		return nil, fmt.Errorf("%w %s (balance-snapshots): %s", ErrInvalidHTTPResponse, resp.Status(), resp.Body())
 	}
 
 	body := string(resp.Body())
@@ -546,7 +549,7 @@ func (session *Session) Positions(accountNumber string, filterOpts ...PositionFi
 	}
 
 	if resp.StatusCode() >= 400 {
-		return nil, fmt.Errorf("%s (positions): %s", resp.Status(), resp.Body())
+		return nil, fmt.Errorf("%w %s (positions): %s", ErrInvalidHTTPResponse, resp.Status(), resp.Body())
 	}
 
 	arr := gjson.Get(string(resp.Body()), "data.items").Array()
@@ -659,7 +662,7 @@ func (session *Session) Transactions(accountNumber string, filterOpts ...Transac
 	}
 
 	if resp.StatusCode() >= 400 {
-		return nil, fmt.Errorf("%s (transactions): %s", resp.Status(), resp.Body())
+		return nil, fmt.Errorf("%w %s (transactions): %s", ErrInvalidHTTPResponse, resp.Status(), resp.Body())
 	}
 
 	arr := gjson.Get(string(resp.Body()), "data.items").Array()
@@ -797,7 +800,7 @@ func (session *Session) Orders(accountNumber string, filterOpts ...OrdersFilterO
 	}
 
 	if resp.StatusCode() >= 400 {
-		return nil, fmt.Errorf("%s (orders): %s", resp.Status(), resp.Body())
+		return nil, fmt.Errorf("%w %s (orders): %s", ErrInvalidHTTPResponse, resp.Status(), resp.Body())
 	}
 
 	arr := gjson.Get(string(resp.Body()), "data.items").Array()
@@ -824,7 +827,7 @@ func (session *Session) SubmitOrder(accountNumber string, order *Order) (*OrderR
 	}
 
 	if resp.StatusCode() >= 400 {
-		return nil, fmt.Errorf("%s: %s", resp.Status(), resp.Body())
+		return nil, fmt.Errorf("%w %s: %s", ErrInvalidHTTPResponse, resp.Status(), resp.Body())
 	}
 
 	content := string(resp.Body())
@@ -978,7 +981,7 @@ func parseOrderStatus(order gjson.Result) *OrderStatus {
 		OrderType:                orderType,
 		ID:                       order.Get("id").String(),
 		OrderRule:                rules,
-		UserId:                   order.Get("user-id").String(),
+		UserID:                   order.Get("user-id").String(),
 		ComplexOrderTag:          order.Get("complex-order-tag").String(),
 		ReceivedAt:               order.Get("received-at").Time(),
 	}

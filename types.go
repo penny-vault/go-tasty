@@ -1,4 +1,4 @@
-// Copyright 2021-2023
+// Copyright 2024
 // SPDX-License-Identifier: Apache-2.0
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,6 +21,8 @@ import (
 	"time"
 )
 
+const UNK = "UNK"
+
 // Session stores user credentials and enables users to make authenticated
 // requests of the tastytrade Open API. Sessions are safe for concurrent
 // use in multiple goroutines.
@@ -35,7 +37,7 @@ type Session struct {
 	ExternalID string
 	Username   string
 
-	ApiURL             string // Base URL of the api, changes based on production vs sandbox environment
+	BaseURL            string // Base URL of the api, changes based on production vs sandbox environment
 	AccountStreamerURL string // Base URL of websocket for account streaming data
 
 	Token *atomic.Value // Session token - valid for 24 hours
@@ -85,7 +87,7 @@ func (sortDirection SortDirection) String() string {
 		return "asc"
 	}
 
-	return "UNK"
+	return UNK
 }
 
 type TimeOfDay int
@@ -103,7 +105,7 @@ func (timeOfDay TimeOfDay) String() string {
 		return "EOD"
 	}
 
-	return "UNK"
+	return UNK
 }
 
 type PositionFilterOpts struct {
@@ -304,7 +306,7 @@ func (timeInForce TimeInForceChoice) String() string {
 	case IOC:
 		return "IOC"
 	default:
-		return "UNK"
+		return UNK
 	}
 }
 
@@ -354,7 +356,7 @@ func (orderType OrderTypeChoice) String() string {
 	case NotionalMarket:
 		return "Notional Market"
 	default:
-		return "UNK"
+		return UNK
 	}
 }
 
@@ -384,7 +386,7 @@ func (effect Effect) String() string {
 	case Debit:
 		return "Debit"
 	default:
-		return "UNK"
+		return UNK
 	}
 }
 
@@ -434,7 +436,7 @@ func (instrumentType InstrumentTypeChoice) String() string {
 	case FutureOption:
 		return "Future Option"
 	default:
-		return "UNK"
+		return UNK
 	}
 }
 
@@ -484,7 +486,7 @@ func (actionType ActionType) String() string {
 	case Buy:
 		return "Buy"
 	default:
-		return "UNK"
+		return UNK
 	}
 }
 
@@ -514,7 +516,7 @@ func (actionCondition ActionCondition) String() string {
 	case Cancel:
 		return "cancel"
 	default:
-		return "UNK"
+		return UNK
 	}
 }
 
@@ -544,7 +546,7 @@ func (indicatorType IndicatorType) String() string {
 	case NAT:
 		return "nat"
 	default:
-		return "UNK"
+		return UNK
 	}
 }
 
@@ -574,7 +576,7 @@ func (comparatorType ComparatorType) String() string {
 	case LTE:
 		return "lte"
 	default:
-		return "UNK"
+		return UNK
 	}
 }
 
@@ -869,7 +871,7 @@ type OrderStatus struct {
 	OrderType                OrderTypeChoice      `json:"order-type"`
 	ID                       string               `json:"id"`
 	OrderRule                []*RuleStatus        `json:"order-rule"`
-	UserId                   string               `json:"user-id"`
+	UserID                   string               `json:"user-id"`
 	ComplexOrderTag          string               `json:"complex-order-tag"`
 	ReceivedAt               time.Time            `json:"received-at"`
 }
