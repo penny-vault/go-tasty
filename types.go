@@ -664,7 +664,7 @@ type Order struct {
 	TimeInForce TimeInForceChoice `json:"time-in-force"`
 
 	// The date in which a GTD order will expire
-	GTCDate time.Time `json:"gtc-date,omitempty"`
+	GTCDate *time.Time `json:"gtc-date,omitempty"`
 
 	// The type of order in regards to the price. i.e. `Limit`, `Market`, `Marketable Limit`, `Stop`, `Stop Limit`, `Notional Market`
 	OrderType OrderTypeChoice `json:"order-type"`
