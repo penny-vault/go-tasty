@@ -691,7 +691,7 @@ func (session *Session) Transactions(accountNumber string, filterOpts ...Transac
 				Price:             lot.Get("price").Float(),
 				QuantityDirection: lot.Get("quantity-direction").String(),
 				ExecutedAt:        lot.Get("executed-at").Time(),
-				TransactionDate:   lot.Get("transaction-date").Time(),
+				TransactionDate:   asDate(lot.Get("transaction-date").String()),
 			}
 		}
 
@@ -699,7 +699,7 @@ func (session *Session) Transactions(accountNumber string, filterOpts ...Transac
 			ID:                               trx.Get("id").Int(),
 			AccountNumber:                    trx.Get("account-number").String(),
 			ExecutedAt:                       trx.Get("executed-at").Time(),
-			TransactionDate:                  trx.Get("transaction-date").Time(),
+			TransactionDate:                  asDate(trx.Get("transaction-date").String()),
 			TransactionType:                  trx.Get("transaction-type").String(),
 			TransactionSubType:               trx.Get("transaction-sub-type").String(),
 			Description:                      trx.Get("description").String(),
@@ -740,7 +740,7 @@ func (session *Session) Transactions(accountNumber string, filterOpts ...Transac
 			Exchange:                         trx.Get("exchange").String(),
 			ReversesID:                       trx.Get("reverses-id").Int(),
 			ExchangeAffiliationID:            trx.Get("exchange-affiliation-identifier").String(),
-			CostBasisReconciliationDate:      trx.Get("cost-basis-reconciliation-date").Time(),
+			CostBasisReconciliationDate:      asDate(trx.Get("cost-basis-reconciliation-date").String()),
 		}
 	}
 
@@ -1035,4 +1035,17 @@ func parseErrors(arr []gjson.Result) []*ErrorMsg {
 		}
 	}
 	return errorArr
+}
+
+func asDate(input string) time.Time {
+	if input == "" {
+		return time.Time{}
+	}
+
+	parsed, err := time.Parse("2006-01-02", input)
+	if err != nil {
+		log.Warn().Err(err).Str("raw", input).Msg("could not date string")
+	}
+
+	return parsed
 }
