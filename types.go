@@ -312,6 +312,10 @@ func TimeInForceFromString(input string) TimeInForceChoice {
 	}
 }
 
+func (timeInForce TimeInForceChoice) MarshalJSON() ([]byte, error) {
+	return []byte("\"" + timeInForce.String() + "\""), nil
+}
+
 func (timeInForce TimeInForceChoice) String() string {
 	switch timeInForce {
 	case Day:
@@ -362,6 +366,10 @@ func OrderTypeFromString(input string) OrderTypeChoice {
 	return UndefinedOrderType
 }
 
+func (orderType OrderTypeChoice) MarshalJSON() ([]byte, error) {
+	return []byte("\"" + orderType.String() + "\""), nil
+}
+
 func (orderType OrderTypeChoice) String() string {
 	switch orderType {
 	case Limit:
@@ -398,6 +406,10 @@ func EffectFromString(input string) Effect {
 	}
 
 	return UndefinedEffect
+}
+
+func (effect Effect) MarshalJSON() ([]byte, error) {
+	return []byte("\"" + effect.String() + "\""), nil
 }
 
 func (effect Effect) String() string {
@@ -440,6 +452,10 @@ func InstrumentTypeFromString(input string) InstrumentTypeChoice {
 	}
 
 	return UndefinedInstrument
+}
+
+func (instrumentType InstrumentTypeChoice) MarshalJSON() ([]byte, error) {
+	return []byte("\"" + instrumentType.String() + "\""), nil
 }
 
 func (instrumentType InstrumentTypeChoice) String() string {
@@ -490,6 +506,10 @@ func ActionTypeFromString(input string) ActionType {
 	}
 
 	return UndefinedAction
+}
+
+func (actionType ActionType) MarshalJSON() ([]byte, error) {
+	return []byte("\"" + actionType.String() + "\""), nil
 }
 
 func (actionType ActionType) String() string {
