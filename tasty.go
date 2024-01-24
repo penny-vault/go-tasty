@@ -951,7 +951,7 @@ func parseOrderStatus(order gjson.Result) *OrderStatus {
 
 	orderStatus := &OrderStatus{
 		Size:                     order.Get("size").String(),
-		TimeInForce:              order.Get("time-in-force").String(),
+		TimeInForce:              TimeInForceFromString(order.Get("time-in-force").String()),
 		TerminalAt:               order.Get("terminal-at").Time(),
 		Editable:                 order.Get("editable").Bool(),
 		ContingentStatus:         order.Get("contingent-status").String(),

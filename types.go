@@ -272,10 +272,12 @@ type Position struct {
 type TimeInForceChoice int
 
 const (
+	UndefinedTimeInForce TimeInForceChoice = iota
+
 	// Day orders live until either the order fills or the market closes.
 	// If a day order does not get filled by the time the market closes,
 	// it transitions to expired.
-	Day TimeInForceChoice = iota
+	Day
 
 	// Good 'til Canceled orders never expire. They will work until they
 	// are either filled or the customer cancels them.
@@ -290,6 +292,25 @@ const (
 	GTCExt
 	IOC
 )
+
+func TimeInForceFromString(input string) TimeInForceChoice {
+	switch input {
+	case "Day":
+		return Day
+	case "GTC":
+		return GTC
+	case "GTD":
+		return GTD
+	case "Ext":
+		return Ext
+	case "GTC Ext":
+		return GTCExt
+	case "IOC":
+		return IOC
+	default:
+		return UndefinedTimeInForce
+	}
+}
 
 func (timeInForce TimeInForceChoice) String() string {
 	switch timeInForce {
