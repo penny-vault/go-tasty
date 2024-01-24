@@ -640,7 +640,7 @@ type Lot struct {
 
 type Order struct {
 	// The length in time before the order expires. i.e. `Day`, `GTC`, `GTD`, `Ext`, `GTC Ext` or `IOC`
-	TimeInForce string `json:"time-in-force"`
+	TimeInForce TimeInForceChoice `json:"time-in-force"`
 
 	// The date in which a GTD order will expire
 	GTCDate time.Time `json:"gtc-date,omitempty"`
@@ -838,7 +838,7 @@ type FeeInfo struct {
 
 type OrderStatus struct {
 	Size                     string               `json:"size"`
-	TimeInForce              string               `json:"time-in-force"`
+	TimeInForce              TimeInForceChoice    `json:"time-in-force"`
 	TerminalAt               time.Time            `json:"terminal-at"`
 	Editable                 bool                 `json:"editable"`
 	ContingentStatus         string               `json:"contingent-status"`
