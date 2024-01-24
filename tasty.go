@@ -824,7 +824,7 @@ func (session *Session) SubmitOrder(accountNumber string, order *Order) (*OrderR
 
 	resp, err := client.R().
 		SetBody(order).
-		Post(fmt.Sprintf("/sessions/%s/orders", accountNumber))
+		Post(fmt.Sprintf("/accounts/%s/orders", accountNumber))
 	if err != nil {
 		return nil, err
 	}
